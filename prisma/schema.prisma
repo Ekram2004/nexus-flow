@@ -1,0 +1,40 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  extensions = [vector]
+}
+
+model Transaction {
+  id           String    @id @default(uuid())
+  source       String     // 'Bank' or 'INTERNAL'
+  amount       Decimal
+  date         DateTime
+  description  String
+  status       String     @default("PENDING") // PENDING, MATCHED, FLAGGED 
+
+  // pgvector embedding
+  embedding    Unsupported("vector(1536)")?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([source, status])
+}
+
+
+model ReconciliationMatch {
+  id                String     @id  @default(uuid())
+  bankTransactionId String
+  internalRecordId  String
+  confidenceScore   Float
+  matchedAt         DateTime   @default(now())
+}
