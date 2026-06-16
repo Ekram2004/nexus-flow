@@ -29,8 +29,20 @@ export async function runReconciliation(bankTxTd: string) {
     // 3. Let the AI reason over the candidates
     for (const candidate of candidates as any[]) {
 
-        const amountsMatch = Number(bankTx.amount) === Number(candidate.amount);
-        const datesMatch = isWithinDateRange(bankTx.date, candidate.date, 5); // 5-day variance limit
+        const bankAmount = parseFloat(bankTx.amount.toString());
+        const candidateAmount = parseFloat(candidate.amount.toString());
+
+        const amountsMatch = bankAmount === candidateAmount;
+        const datesMatch = isWithinDateRange(bankTx.date, candidate.date, 5); 
+
+console.log(`[Diagnostic] Checking Candidate: "${candidate.description}"`);
+console.log(
+  `  - Amounts: Bank=${bankAmount} | Internal=${candidateAmount} -> Match: ${amountsMatch}`,
+);
+console.log(
+  `  - Dates: Bank=${bankTx.date.toISOString()} | Internal=${new Date(candidate.date).toISOString()} -> Match: ${datesMatch}`,
+);
+
 
         if (!amountsMatch || !datesMatch) {
           console.log(
@@ -55,6 +67,11 @@ export async function runReconciliation(bankTxTd: string) {
               where: { id: bankTx.id },
               data: { status: "MATCHED" },
             });
+            await prisma.transaction.update({
+              where: { id: candidate.id }, //
+              data: { status: "MATCHED" },
+            });
+
             return { status: 'SUCCESS', match: candidate.id };
         }
     }
