@@ -22,7 +22,8 @@ model Transaction {
   status       String     @default("PENDING") // PENDING, MATCHED, FLAGGED 
 
   // pgvector embedding
-  embedding    Unsupported("vector(1536)")?
+  embedding    Unsupported("vector(384)")?
+
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

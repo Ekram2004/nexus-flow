@@ -1,23 +1,35 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { OpenAIEmbeddings } from '@langchain/openai';
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
+import Embedder from "../utils/embedder.js";
 
-const prisma = new PrismaClient();
-const embeddings = new OpenAIEmbeddings();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
 
 export async function findPotentialMatches(description: string) {
-    // 1 Convert the description to a vector (embedding)
-    const queryEmbedding = await embeddings.embedQuery(description);
+  // 1. Convert the description to a vector (embedding)
+  const queryEmbedding = await Embedder.generate(description);
 
-    // 2. Perform a similarity search using pgvector
-    // we look for 'Internal' transaction that are pending 
+  // 2. Format the float array into a string matching pgvector syntax: '[0.1,0.2,...]'
+  const embeddingString = `[${queryEmbedding.join(",")}]`;
 
-    const candidates = await prisma.$queryRaw`SELECT id, description, amount,
-    1 - (embedding <=> ${queryEmbedding}::vector) AS similarity FROM "Transaction"
-    WHERE source = 'INETRNAL'
+  // 3. Query the DB using $queryRawUnsafe with positional arguments
+  const candidates = await prisma.$queryRawUnsafe(
+    `
+    SELECT id, description, amount, date, status,
+    (1 - (embedding <=> $1::vector)) AS similarity 
+    FROM "Transaction"
+    WHERE source = 'INTERNAL'
     AND status = 'PENDING'
-    OREDER BY similarity DESC
-    LIMIT 3;
-    `;
+    AND (1 - (embedding <=> $1::vector)) > 0.8
+    ORDER BY similarity DESC
+    LIMIT 5;
+  `,
+    embeddingString,
+  );
 
-    return candidates;
+  return candidates;
 }

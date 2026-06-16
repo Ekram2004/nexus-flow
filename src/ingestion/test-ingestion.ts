@@ -1,5 +1,5 @@
-import { processRawTransaction } from "./processor";
-import { logger } from "../utils/logger";
+import { processRawTransaction } from "./processor.js";
+import { logger } from "../utils/logger.js";
 
 
 async function runTest() {
