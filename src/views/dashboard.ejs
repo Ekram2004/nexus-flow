@@ -28,20 +28,27 @@
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
     
     <!-- Real-Time Background Worker Metrics Widgets -->
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+    <section class="grid grid-cols-1 md:grid-cols-4 gap-6"> 
       <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-sm">
         <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Worker Thread Status</p>
-        <p class="mt-2 text-3xl font-semibold text-teal-400"><%= worker.status %></p>
+        <p id="worker-status-txt" class="mt-2 text-3xl font-semibold text-teal-400"><%= worker.status %></p>
       </div>
       <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-sm">
         <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Queue Backlog Size</p>
-        <p class="mt-2 text-3xl font-semibold text-cyan-400"><%= worker.backlogCount %> pending</p>
+        <p id="backlog-count-txt" class="mt-2 text-3xl font-semibold text-cyan-400"><%= worker.backlogCount %> pending</p>
       </div>
       <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-sm">
-        <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Total Flagged Rows</p>
+        <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Unresolved Queue</p>
         <p class="mt-2 text-3xl font-semibold text-amber-500"><%= meta.totalRecords %> cases</p>
       </div>
+      <!-- 🔥 NEW: Team Efficiency Core Speed Metric Widget -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-sm">
+        <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Avg Resolution Speed</p>
+        <p class="mt-2 text-3xl font-semibold text-emerald-400"><%= meta.avgResolutionSpeed %></p>
+      </div>
     </section>
+
 
     <!-- Flagged Transactions Management Workspace -->
     <section class="bg-slate-950 border border-slate-800 rounded-xl shadow-xl overflow-hidden">

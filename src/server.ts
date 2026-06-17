@@ -313,14 +313,22 @@ fastify.get("/dashboard", async (request, reply) => {
     const workerMetrics = workerQueue.getMetrics();
 
     // Query database directly for open items window
-    const [totalCount, flaggedTransactions] = await Promise.all([
+    const [totalCount, flaggedTransactions, aggregations] = await Promise.all([
       prisma.transaction.count({ where: { status: "FLAGGED" } }),
       prisma.transaction.findMany({
         where: { status: "FLAGGED" },
         orderBy: { createdAt: "desc" },
         take: 20, // Display top 20 newest exceptions automatically
       }),
+      prisma.auditResolutionLog.aggregate({
+        _avg: { secondsToResolve: true },
+      }),
     ]);
+const avgSeconds = Math.round(aggregations._avg.secondsToResolve || 0);
+const readableAvgSpeed =
+  avgSeconds > 0
+    ? `${Math.floor(avgSeconds / 60)}m ${avgSeconds % 60}s`
+    : "N/A";
 
     
     return reply.view("dashboard.ejs", {
@@ -329,6 +337,7 @@ fastify.get("/dashboard", async (request, reply) => {
         totalRecords: totalCount,
         currentPage: 1,
         totalPages: Math.ceil(totalCount / 20),
+        avgResolutionSpeed: readableAvgSpeed,
       },
       transactions: flaggedTransactions,
     });
