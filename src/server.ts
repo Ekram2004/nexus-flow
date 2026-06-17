@@ -99,23 +99,51 @@ fastify.get("/transactions/flagged", async (request, reply) => {
     try {
         fastify.log.info("Fetching flagged transactions for dashboard audit...");
 
-        const flaggedTransactions = await prisma.transaction.findMany({
-            where: {
-                status: "FLAGGED"
-            },
+        const query = request.query as {
+          page?: string;
+          limit?: string;
+          sortBy?: string;
+          order?: string;
+        };
+
+        const page = Math.max(1, parseInt(query.page || "1", 10));
+        const limit = Math.max(
+          1,
+          Math.min(100, parseInt(query.limit || "10", 10)),
+        ); // Cap maximum limit at 100 rows
+        const skip = (page - 1) * limit;
+
+        // Validate sorting parameters to prevent SQL injection profiles
+    const allowedSortFields = ["date", "amount", "createdAt", "description"];
+    const sortBy = allowedSortFields.includes(query.sortBy || "") ? (query.sortBy as string) : "createdAt";
+    const order = (query.order || "").toLowerCase() === "asc" ? "asc" : "desc";
+
+
+
+        const [totalCount, flaggedTransactions] = await Promise.all([
+          prisma.transaction.count({
+            where: { status: "FLAGGED" },
+          }),
+          prisma.transaction.findMany({
+            where: { status: "FLAGGED" },
             select: {
-                id: true,
-                source: true,
-                amount: true,
-                date: true,
-                description: true,
-                status: true,
-                createdAt: true,
+              id: true,
+              source: true,
+              amount: true,
+              date: true,
+              description: true,
+              status: true,
+              createdAt: true,
             },
+            skip,
+            take: limit,
             orderBy: {
-                createdAt: "desc",
-            }
-        });
+              [sortBy]: order,
+            },
+          }),
+        ]);
+
+
 
         return reply.status(200).send({
             success: true,
