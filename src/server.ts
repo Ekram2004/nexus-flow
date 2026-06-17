@@ -20,6 +20,22 @@ const fastify = Fastify({
   },
 });
 
+// Global API Security Middleware Hook
+fastify.addHook("preHandler", async (request, reply) => {
+    const apiKey = request.headers["x-api-key"];
+    const expectedKey = process.env.RECON_API_KEY; 
+
+    if (!apiKey || apiKey !== expectedKey) {
+    fastify.log.warn(`Unauthorized access attempt blocked from IP: ${request.ip}`);
+    return reply.status(401).send({
+      success: false,
+      error: "Unauthorized",
+      message: "Invalid or missing 'X-API-KEY' header credentials.",
+    });
+  }
+});
+
+
 const webhookSchema = {
   body: {
     type: "object",
