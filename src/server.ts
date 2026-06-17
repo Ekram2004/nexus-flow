@@ -4,7 +4,7 @@ import { runReconciliation } from "./agents/orchestrator.js";
 import { PrismaClient } from "@prisma/client";
 import { Pool } from 'pg';
 import { PrismaPg } from "@prisma/adapter-pg";
-import { request } from "node:http";
+import { workerQueue } from "./utils/queue.js";
 
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -76,34 +76,23 @@ const webhookSchema = {
 };
 
 fastify.post("/webhooks/reconcile", { schema: webhookSchema }, async (request, reply) => {
-    const { bankTransactionId } = request.body as { bankTransactionId: string };
-    
+  const { bankTransactionId } = request.body as { bankTransactionId: string };
+
     fastify.log.info(`Received webhook for transaction:${bankTransactionId}`);
+    
+  // 1. Push directly into the asynchronous processing line
+  workerQueue.enqueue({ bankTransactionId });
 
-    try {
-        const result = await runReconciliation(bankTransactionId);
-
-        if (result.status === "SUCCESS") {
-            return reply.status(200).send({
-                success: true,
-                message: 'Transaction successfully reconciled.',
-                data: result,
-            });
-        }
-
-        return reply.status(200).send({
-            success: false,
-            message: 'Transaction processing completed but flagged for review.',
-            data: result
-        });
-    } catch (error: any) {
-        fastify.log.error(`Pipeline failure for ID ${bankTransactionId}: ${error.message}`);
-        return reply.status(500).send({
-          success: false,
-          error: "Internal Reconciliation Engine Failure",
-          details: error.message,
-        });
+  // 2. Respond immediately to the client with 202 Accepted
+  return reply.status(202).send({
+    success: true,
+    message: "Transaction accepted and placed into the processing queue.",
+    data: {
+      bankTransactionId,
+      status: "QUEUED",
+      pendingTasksAhead: workerQueue.getPendingCount() - 1
     }
+  });
 });
 
 fastify.get("/transactions/flagged", async (request, reply) => {
