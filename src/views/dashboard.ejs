@@ -6,6 +6,44 @@
   <title>NexusFlow | Administrative Recon Dashboard</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Bulletproof Dark-Mode Fallback Styles (If CDN loads slowly or is blocked) -->
+  <style>
+    body {
+      background-color: #0f172a !important;
+      color: #f1f5f9 !important;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    header {
+      background-color: rgba(2, 6, 23, 0.8) !important;
+      border-bottom: 1px solid #1e293b !important;
+    }
+    section, .bg-slate-950 {
+      background-color: #020617 !important;
+      border: 1px solid #1e293b !important;
+      border-radius: 0.75rem;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th { 
+      background-color: #1e293b; 
+      color: #94a3b8; 
+      padding: 1rem; 
+      font-size: 0.75rem; 
+      text-transform: uppercase; 
+    }
+    td { padding: 1rem; border-bottom: 1px solid #1e293b; }
+    tr:hover { background-color: rgba(30, 41, 59, 0.3); }
+    button {
+      background-color: #2dd4bf !important;
+      color: #0f172a !important;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+    }
+    button:hover { background-color: #5eead4 !important; }
+  </style>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans min-h-screen">
 
@@ -13,7 +51,6 @@
   <header class="border-b border-slate-800 bg-slate-950/50 backdrop-blur sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <!-- <span class="text-2xl">🚀</span> -->
         <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">NexusFlow Engine</h1>
       </div>
       <div class="flex items-center space-x-4">
@@ -28,8 +65,7 @@
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
     
     <!-- Real-Time Background Worker Metrics Widgets -->
-
-    <section class="grid grid-cols-1 md:grid-cols-4 gap-6"> 
+    <section class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
       <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-sm">
         <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Worker Thread Status</p>
         <p id="worker-status-txt" class="mt-2 text-3xl font-semibold text-teal-400"><%= worker.status %></p>
@@ -42,21 +78,24 @@
         <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Unresolved Queue</p>
         <p class="mt-2 text-3xl font-semibold text-amber-500"><%= meta.totalRecords %> cases</p>
       </div>
-      <!--  Team Efficiency Core Speed Metric Widget -->
       <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-sm">
         <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Avg Resolution Speed</p>
         <p class="mt-2 text-3xl font-semibold text-emerald-400"><%= meta.avgResolutionSpeed %></p>
       </div>
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-sm">
+        <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Active Table Size</p>
+        <p class="mt-2 text-3xl font-semibold text-fuchsia-400"><%= meta.tableDiskSize %></p>
+      </div>
     </section>
-
 
     <!-- Flagged Transactions Management Workspace -->
     <section class="bg-slate-950 border border-slate-800 rounded-xl shadow-xl overflow-hidden">
-      <div class="px-6 py-5 border-b border-slate-800 flex justify-between items-center">
-        <h2 class="text-lg font-semibold text-slate-200">Human Review Exception Queue</h2>
-        <span class="text-sm text-slate-400">Showing page <%= meta.currentPage %> of <%= meta.totalPages || 1 %></span>
-      </div>
-<div class="w-full sm:w-72">
+      <div class="px-6 py-5 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-200">Human Review Exception Queue</h2>
+          <span class="text-sm text-slate-400">Showing page <%= meta.currentPage %> of <%= meta.totalPages || 1 %></span>
+        </div>
+        <div class="w-full sm:w-72">
           <input 
             type="text" 
             id="table-search-input" 
@@ -65,6 +104,7 @@
             class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
           />
         </div>
+      </div>
 
       <% if (transactions.length === 0) { %>
         <div class="p-12 text-center text-slate-500 space-y-2">
@@ -116,7 +156,25 @@
   </main>
 
   <script>
+    // Real-time client-side fuzzy text search filter
+    function executeFuzzySearch() {
+      const input = document.getElementById("table-search-input");
+      const filter = input.value.toLowerCase().trim();
+      const table = document.querySelector("table");
+      if (!table) return;
 
+      const rows = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+      for (let i = 0; i < rows.length; i++) {
+        const textContent = rows[i].textContent.toLowerCase();
+        if (textContent.includes(filter)) {
+          rows[i].style.display = "";
+        } else {
+          rows[i].style.display = "none";
+        }
+      }
+    }
+
+    // High-frequency AJAX metrics background loop
     async function updateLiveMetrics() {
       try {
         const response = await fetch('/queue/status', {
@@ -161,45 +219,4 @@
             'Content-Type': 'application/json',
             'X-API-KEY': 'nexus_secret_secure_key_2026'
           },
-          body: JSON.stringify({ bankTransactionId: bankId, internalRecordId: internalId })
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-          alert("Success! Transactions linked and flagged status resolved.");
-          window.location.reload();
-        } else {
-          alert("Error: " + data.details);
-        }
-      } catch (err) {
-        alert("Execution failure connecting to API server.");
-      }
-    }
-        // 🔥 NEW: Instant Client-Side Fuzzy Search Logic
-    function executeFuzzySearch() {
-      const input = document.getElementById("table-search-input");
-      const filter = input.value.toLowerCase().trim();
-      const table = document.querySelector("table");
-      
-      if (!table) return; // If the queue is empty, do nothing
-      
-      const rows = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
-
-      // Loop through all table rows, hiding those that don't match the search query
-      for (let i = 0; i < rows.length; i++) {
-        const textContent = rows[i].textContent.toLowerCase();
-        
-        if (textContent.includes(filter)) {
-          rows[i].style.display = ""; // Show matching row
-        } else {
-          rows[i].style.display = "none"; // Hide non-matching row
-        }
-      }
-    }
-
-  </script>
-</body>
-</html>
-
-</body>
-</html>
+body: JSON.stringify({ bankTransactionId: bankId, internalRecordId: internalId })});const data = await response.json();if (data.success) {alert("Success! Transactions linked and flagged status resolved.");window.location.reload();} else {alert("Error: " + data.details);}} catch (err) {alert("Execution failure connecting to API server.");}}
