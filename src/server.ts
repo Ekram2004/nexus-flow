@@ -466,6 +466,98 @@ fastify.get("/analytics/dashboard", async (request, reply) => {
 });
 
 
+// 🔥 NEW: Automated Database Maintenance & Archiving Endpoint
+fastify.post("/admin/archive", async (request, reply) => {
+  try {
+    fastify.log.info("Starting automated database archiving routine...");
+
+    // 1. Define the 30-day age boundary limit
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // 2. Perform atomic migration within a strict database transaction block
+    const metrics = await prisma.$transaction(async (tx) => {
+      
+      // A. Find matched transactions older than 30 days
+      const targets = await tx.transaction.findMany({
+        where: {
+          status: "MATCHED",
+          updatedAt: { lt: thirtyDaysAgo }
+        }
+      });
+
+      if (targets.length === 0) {
+        return { migratedCount: 0 };
+      }
+
+      const targetIds = targets.map(t => t.id);
+
+      // B. Fetch corresponding audit log entries to migrate
+      const auditLogs = await tx.auditResolutionLog.findMany({
+        where: { bankTransactionId: { in: targetIds } }
+      });
+
+      // C. Move transactions to cold storage archive
+      await tx.archivedTransaction.createMany({
+        data: targets.map(t => ({
+          id: t.id,
+          source: t.source,
+          amount: t.amount,
+          date: t.date,
+          description: t.description,
+          status: t.status,
+          createdAt: t.createdAt
+        }))
+      });
+
+      // D. Move analytics log to cold storage archive
+      if (auditLogs.length > 0) {
+        await tx.archivedMatchLog.createMany({
+          data: auditLogs.map(log => ({
+            id: log.id,
+            bankTransactionId: log.bankTransactionId,
+            internalRecordId: log.internalRecordId,
+            secondsToResolve: log.secondsToResolve,
+            resolvedAt: log.resolvedAt
+          }))
+        });
+
+        // Delete from active analytics log
+        await tx.auditResolutionLog.deleteMany({
+          where: { bankTransactionId: { in: targetIds } }
+        });
+      }
+
+      // E. Delete records from active primary transaction table
+      await tx.transaction.deleteMany({
+        where: { id: { in: targetIds } }
+      });
+
+      return { migratedCount: targets.length };
+    });
+
+    fastify.log.info(`[Archive Engine] Successfully optimized indices. Archived ${metrics.migratedCount} rows.`);
+
+    return reply.status(200).send({
+      success: true,
+      message: "Database optimization routine completed successfully.",
+      data: {
+        recordsArchivedCount: metrics.migratedCount,
+        boundaryThresholdDate: thirtyDaysAgo.toISOString()
+      }
+    });
+
+  } catch (error: any) {
+    fastify.log.error(`Database archiving job failed: ${error.message}`);
+    return reply.status(500).send({
+      success: false,
+      error: "Archiving Execution Failure",
+      details: error.message
+    });
+  }
+});
+
+
 
 const start = async () => {
     try {

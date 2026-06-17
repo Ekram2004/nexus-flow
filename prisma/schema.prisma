@@ -47,3 +47,23 @@ model AuditResolutionLog {
   secondsToResolve    Int
   resolvedAt          DateTime @default(now())
 }
+
+model ArchivedTransaction {
+  id           String    @id
+  source       String
+  amount       Decimal
+  date         DateTime
+  description  String
+  status       String
+  createdAt    DateTime
+  archivedAt   DateTime  @default(now())
+}
+
+model ArchivedMatchLog {
+  id                  String   @id
+  bankTransactionId   String
+  internalRecordId    String
+  secondsToResolve    Int
+  resolvedAt          DateTime
+  archivedAt          DateTime @default(now())
+}
