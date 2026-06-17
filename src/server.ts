@@ -22,6 +22,11 @@ const fastify = Fastify({
 
 // Global API Security Middleware Hook
 fastify.addHook("preHandler", async (request, reply) => {
+
+    if (request.url === "/health") {
+      return;
+    }
+
     const apiKey = request.headers["x-api-key"];
     const expectedKey = process.env.RECON_API_KEY; 
 
@@ -35,6 +40,30 @@ fastify.addHook("preHandler", async (request, reply) => {
   }
 });
 
+// Public Health Check Probe
+fastify.get("/health", async (request, reply) => {
+    const healthStatus = {
+      status: "UP",
+      timestamp: new Date().toISOString(),
+      services: {
+        uptime: process.uptime(),
+        database: "DOWN",
+      },
+    };
+    try {
+      await pool.query("SELECT 1");
+      healthStatus.services.database = "UP";
+
+      return reply.status(200).send(healthStatus);
+    } catch (error: any) {
+      fastify.log.error(`Health check failed: ${error.message}`);
+      healthStatus.status = "DOWN";
+
+      // Return an HTTP 503 Service Unavailable so load balancers know the container is unhealthy
+      return reply.status(503).send(healthStatus);
+    }
+
+});
 
 const webhookSchema = {
   body: {
