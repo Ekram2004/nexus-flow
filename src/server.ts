@@ -1,7 +1,15 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import { runReconciliation } from "./agents/orchestrator.js";
+import { PrismaClient } from "@prisma/client";
+import { Pool } from 'pg';
+import { PrismaPg } from "@prisma/adapter-pg";
 import { request } from "node:http";
+
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 
 const fastify = Fastify({
@@ -52,6 +60,44 @@ fastify.post("/webhooks/reconcile", { schema: webhookSchema }, async (request, r
         });
     }
 });
+
+fastify.get("/transactions/flagged", async (request, reply) => {
+    try {
+        fastify.log.info("Fetching flagged transactions for dashboard audit...");
+
+        const flaggedTransactions = await prisma.transaction.findMany({
+            where: {
+                status: "FLAGGED"
+            },
+            select: {
+                id: true,
+                source: true,
+                amount: true,
+                date: true,
+                description: true,
+                status: true,
+                createdAt: true,
+            },
+            orderBy: {
+                createdAt: "desc",
+            }
+        });
+
+        return reply.status(200).send({
+            success: true,
+            count: flaggedTransactions.length,
+            transactions: flaggedTransactions
+        });
+    } catch (error: any) {
+        fastify.log.error(`Failed to fetch flagged items: ${error.message}`);
+        return reply.status(500).send({
+          success: false,
+          error: "Database Fetch Failure",
+          details: error.message,
+        });
+ 
+    }
+ });
 
 
 const start = async () => {

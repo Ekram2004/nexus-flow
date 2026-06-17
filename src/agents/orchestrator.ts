@@ -74,7 +74,12 @@ console.log(
 
             return { status: 'SUCCESS', match: candidate.id };
         }
-    }
+  }
+  await prisma.transaction.update({
+    where: { id: bankTx.id },
+    data: { status: "FLAGGED" },
+  });
+
 
     return { status: "FLAGGED", reason: "No confident match found" };
 }
