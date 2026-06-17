@@ -3,6 +3,7 @@ import { verifyMatch } from "./reasoner.js";
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { sendFlaggedAlert } from "../utils/notifier.js";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -78,6 +79,13 @@ console.log(
   await prisma.transaction.update({
     where: { id: bankTx.id },
     data: { status: "FLAGGED" },
+  });
+
+  sendFlaggedAlert({
+    id: bankTx.id,
+    description: bankTx.description,
+    amount: parseFloat(bankTx.amount.toString()),
+    source: bankTx.source,
   });
 
 
