@@ -339,6 +339,46 @@ fastify.get("/dashboard", async (request, reply) => {
 });
 
 
+// Define structural validation schema for an array of transaction IDs
+const batchWebhookSchema = {
+  body: {
+    type: "object",
+    required: ["bankTransactionIds"],
+    properties: {
+      bankTransactionIds: {
+        type: "array",
+        minItems: 1,
+        maxItems: 100, // Safe upper boundary gate per single HTTP payload
+        items: { type: "string", format: "uuid" }
+      }
+    }
+  }
+};
+
+// High-Throughput Batch Ingestion Endpoint
+fastify.post("/webhooks/reconcile/batch", { schema: batchWebhookSchema }, async (request, reply) => {
+  const { bankTransactionIds } = request.body as { bankTransactionIds: string[] };
+  
+  fastify.log.info(`Received batch upload containing ${bankTransactionIds.length} transaction tasks.`);
+
+  // 1. Bulk push each incoming transaction payload straight into the async worker queue line
+  for (const id of bankTransactionIds) {
+    workerQueue.enqueue({ bankTransactionId: id });
+  }
+
+  // 2. Instantly return a 202 Accepted summary metadata payload to the client
+  return reply.status(202).send({
+    success: true,
+    message: `Batch successfully processed. Enqueued ${bankTransactionIds.length} tasks into the background worker line.`,
+    data: {
+      batchSizeProcessed: bankTransactionIds.length,
+      currentTotalBacklog: workerQueue.getPendingCount(),
+      status: "BATCH_ACCEPTED"
+    }
+  });
+});
+
+
 
 const start = async () => {
     try {
