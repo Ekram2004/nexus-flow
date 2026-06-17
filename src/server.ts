@@ -9,6 +9,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import pointOfView from "@fastify/view";
 import ejs from "ejs";
+import { request } from "http";
 
 
 
@@ -216,7 +217,15 @@ fastify.post("/transactions/resolve", { schema: resolveSchema }, async (request,
           details:
             "One or both of the provided transaction IDs do not exist in the database.",
         });
-      }
+        }
+        
+        const flaggedTime = new Date(bankTx.createdAt).getTime();
+        const resolutionTime = new Date().getTime();
+        const secondsToResolve = Math.max(
+          0,
+          Math.floor((resolutionTime - flaggedTime) / 1000),
+        );
+
       // 2. Prform safe atomic database updates within an isolated transaction boundary
       const resolution = await prisma.$transaction(async (tx) => {
         // Create the audit trial record mapping link
@@ -227,6 +236,15 @@ fastify.post("/transactions/resolve", { schema: resolveSchema }, async (request,
             confidenceScore: 1.0, // Manual override is treated as 100% confident operator decision
           },
         });
+          
+          await tx.auditResolutionLog.create({
+            data: {
+              bankTransactionId: bankTx.id,
+              internalRecordId: internalTx.id,
+              secondsToResolve: secondsToResolve,
+            },
+          });
+
 
         // Mark the bank Transaction as MATCHED
         await tx.transaction.update({
@@ -319,7 +337,6 @@ fastify.get("/dashboard", async (request, reply) => {
     return reply.status(500).send("Fatal Error Loading Interface Workspace.");
   }
 });
-
 
 
 
