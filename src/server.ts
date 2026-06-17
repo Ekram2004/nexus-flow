@@ -279,7 +279,18 @@ fastify.get("/queue/status", async (request, reply) => {
   try {
     fastify.log.info("Fetching real-time background worker metrics...");
 
-    const queueMetrics = workerQueue.getMetrics();
+      const queueMetrics = workerQueue.getMetrics();
+      
+    //Execute a raw SQL query to capture real-time Postgres table storage footprints
+    const storageQuery = await prisma.$queryRawUnsafe<any[]>(`
+      SELECT 
+        pg_total_relation_size('"Transaction"') AS total_bytes,
+        pg_size_pretty(pg_total_relation_size('"Transaction"')) AS human_readable
+    `);
+const tableStats = storageQuery[0] || {
+  total_bytes: 0,
+  human_readable: "0 bytes",
+};
 
     return reply.status(200).send({
       success: true,
@@ -289,10 +300,16 @@ fastify.get("/queue/status", async (request, reply) => {
         backlogCount: queueMetrics.backlogSize,
         backlogItems: queueMetrics.pendingTaskIds,
       },
+      storage: {
+        activeTransactionTable: {
+          bytes: Number(tableStats.total_bytes),
+          readable: tableStats.human_readable,
+        },
+      },
       system: {
         uptime: process.uptime(),
         memoryUsage: process.memoryUsage().heapUsed, // Tracking memory load prevents leaks during bulk batches
-      }
+      },
     });
   } catch (error: any) {
     fastify.log.error(`Queue monitoring request failed: ${error.message}`);
