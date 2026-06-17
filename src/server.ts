@@ -208,7 +208,39 @@ fastify.post("/transactions/resolve", { schema: resolveSchema }, async (request,
         details: error.message,
       });
     }
- });
+});
+ 
+// NEW: Worker Queue Performance Metric Endpoint
+fastify.get("/queue/status", async (request, reply) => {
+  try {
+    fastify.log.info("Fetching real-time background worker metrics...");
+
+    const queueMetrics = workerQueue.getMetrics();
+
+    return reply.status(200).send({
+      success: true,
+      timestamp: new Date().toISOString(),
+      worker: {
+        status: queueMetrics.status,
+        backlogCount: queueMetrics.backlogSize,
+        backlogItems: queueMetrics.pendingTaskIds,
+      },
+      system: {
+        uptime: process.uptime(),
+        memoryUsage: process.memoryUsage().heapUsed, // Tracking memory load prevents leaks during bulk batches
+      }
+    });
+  } catch (error: any) {
+    fastify.log.error(`Queue monitoring request failed: ${error.message}`);
+    return reply.status(500).send({
+      success: false,
+      error: "Metrics Retrieval Error",
+      details: error.message,
+    });
+  }
+});
+
+
 
 const start = async () => {
     try {

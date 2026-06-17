@@ -50,6 +50,14 @@ class WorkerQueue {
   public getPendingCount(): number {
     return this.queue.length;
   }
+    public getMetrics() {
+      return {
+        status: this.isProcessing ? "PROCESSING" : "IDLE",
+        backlogSize: this.queue.length,
+        pendingTaskIds: this.queue.map((task) => task.bankTransactionId),
+      };
+
+  }
 }
 
 export const workerQueue = new WorkerQueue();
