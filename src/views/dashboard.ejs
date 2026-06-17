@@ -100,6 +100,40 @@
   </main>
 
   <script>
+
+    async function updateLiveMetrics() {
+      try {
+        const response = await fetch('/queue/status', {
+          headers: {
+            'X-API-KEY': 'nexus_secret_secure_key_2026'
+          }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          const statusTxt = document.getElementById('worker-status-txt');
+          const backlogTxt = document.getElementById('backlog-count-txt');
+          
+          if (statusTxt) statusTxt.innerText = data.worker.status;
+          if (backlogTxt) backlogTxt.innerText = data.worker.backlogCount + " pending";
+          
+          if (statusTxt) {
+            if (data.worker.status === 'PROCESSING') {
+              statusTxt.className = "mt-2 text-3xl font-semibold text-amber-400 animate-pulse";
+            } else {
+              statusTxt.className = "mt-2 text-3xl font-semibold text-teal-400";
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[Metrics Sync] Remote background telemetry poll timed out.");
+      }
+    }
+
+    // Run the metric scanner update loop automatically every 3 seconds
+    setInterval(updateLiveMetrics, 3000);
+
+    // Manual Override resolution handler
     async function resolveManually(bankId) {
       const internalId = prompt("Please input the matching internal transaction UUID token:");
       if (!internalId) return;
@@ -109,7 +143,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-API-KEY': 'nexus_secret_secure_key_2026' // Use env credential in production
+            'X-API-KEY': 'nexus_secret_secure_key_2026'
           },
           body: JSON.stringify({ bankTransactionId: bankId, internalRecordId: internalId })
         });
@@ -126,5 +160,8 @@
       }
     }
   </script>
+</body>
+</html>
+
 </body>
 </html>
