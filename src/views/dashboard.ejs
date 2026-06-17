@@ -42,7 +42,7 @@
         <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Unresolved Queue</p>
         <p class="mt-2 text-3xl font-semibold text-amber-500"><%= meta.totalRecords %> cases</p>
       </div>
-      <!-- 🔥 NEW: Team Efficiency Core Speed Metric Widget -->
+      <!--  Team Efficiency Core Speed Metric Widget -->
       <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-sm">
         <p class="text-sm font-medium text-slate-400 uppercase tracking-wider">Avg Resolution Speed</p>
         <p class="mt-2 text-3xl font-semibold text-emerald-400"><%= meta.avgResolutionSpeed %></p>
@@ -56,6 +56,15 @@
         <h2 class="text-lg font-semibold text-slate-200">Human Review Exception Queue</h2>
         <span class="text-sm text-slate-400">Showing page <%= meta.currentPage %> of <%= meta.totalPages || 1 %></span>
       </div>
+<div class="w-full sm:w-72">
+          <input 
+            type="text" 
+            id="table-search-input" 
+            onkeyup="executeFuzzySearch()" 
+            placeholder="Search exceptions (merchant, ID, amount)..." 
+            class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
+          />
+        </div>
 
       <% if (transactions.length === 0) { %>
         <div class="p-12 text-center text-slate-500 space-y-2">
@@ -166,6 +175,28 @@
         alert("Execution failure connecting to API server.");
       }
     }
+        // 🔥 NEW: Instant Client-Side Fuzzy Search Logic
+    function executeFuzzySearch() {
+      const input = document.getElementById("table-search-input");
+      const filter = input.value.toLowerCase().trim();
+      const table = document.querySelector("table");
+      
+      if (!table) return; // If the queue is empty, do nothing
+      
+      const rows = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+
+      // Loop through all table rows, hiding those that don't match the search query
+      for (let i = 0; i < rows.length; i++) {
+        const textContent = rows[i].textContent.toLowerCase();
+        
+        if (textContent.includes(filter)) {
+          rows[i].style.display = ""; // Show matching row
+        } else {
+          rows[i].style.display = "none"; // Hide non-matching row
+        }
+      }
+    }
+
   </script>
 </body>
 </html>
