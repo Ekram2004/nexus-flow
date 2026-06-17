@@ -378,6 +378,84 @@ fastify.post("/webhooks/reconcile/batch", { schema: batchWebhookSchema }, async 
   });
 });
 
+// Operational Performance Reporting Analytics Endpoint
+fastify.get("/analytics/dashboard", async (request, reply) => {
+  try {
+    fastify.log.info("Calculating operational exception resolution metrics...");
+
+    // 1. Fetch aggregation numbers directly from the AuditResolutionLog table
+    const aggregations = await prisma.auditResolutionLog.aggregate({
+      _count: {
+        id: true,
+      },
+      _avg: {
+        secondsToResolve: true,
+      },
+      _min: {
+        secondsToResolve: true,
+      },
+      _max: {
+        secondsToResolve: true,
+      },
+    });
+
+    const totalResolved = aggregations._count.id;
+
+    // 2. Handle fallback edge case if no manual resolutions exist in the log database yet
+    if (totalResolved === 0) {
+      return reply.status(200).send({
+        success: true,
+        message: "No historical resolution data available for analytics tracking yet.",
+        metrics: {
+          totalResolvedExceptions: 0,
+          averageResolutionSpeedSeconds: 0,
+          fastestResolutionSeconds: 0,
+          slowestResolutionSeconds: 0,
+          operationalEfficiencyRating: "N/A",
+        },
+      });
+    }
+
+    const avgSeconds = Math.round(aggregations._avg.secondsToResolve || 0);
+    const minSeconds = aggregations._min.secondsToResolve || 0;
+    const maxSeconds = aggregations._max.secondsToResolve || 0;
+
+    // 3. Determine an operational efficiency rating scale based on average speed boundaries
+    let efficiencyRating = "EXCELLENT";
+    if (avgSeconds > 300) efficiencyRating = "NEEDS_OPTIMIZATION"; // > 5 minutes
+    else if (avgSeconds > 120) efficiencyRating = "STANDARD";     // > 2 minutes
+
+    return reply.status(200).send({
+      success: true,
+      timestamp: new Date().toISOString(),
+      metrics: {
+        totalResolvedExceptions: totalResolved,
+        averageResolutionSpeed: {
+          rawSeconds: avgSeconds,
+          readableFormat: `${Math.floor(avgSeconds / 60)}m ${avgSeconds % 60}s`
+        },
+        fastestResolutionTime: {
+          rawSeconds: minSeconds,
+          readableFormat: `${Math.floor(minSeconds / 60)}m ${minSeconds % 60}s`
+        },
+        slowestResolutionTime: {
+          rawSeconds: maxSeconds,
+          readableFormat: `${Math.floor(maxSeconds / 60)}m ${maxSeconds % 60}s`
+        },
+        operationalEfficiencyRating: efficiencyRating,
+      }
+    });
+
+  } catch (error: any) {
+    fastify.log.error(`Analytics generation dashboard failed: ${error.message}`);
+    return reply.status(500).send({
+      success: false,
+      error: "Analytics Computation Error",
+      details: error.message,
+    });
+  }
+});
+
 
 
 const start = async () => {
