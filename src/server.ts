@@ -41,7 +41,11 @@ await fastify.register(pointOfView, {
 // Global API Security Middleware Hook
 fastify.addHook("preHandler", async (request, reply) => {
 
-if (request.url === "/health" || request.url === "/dashboard") {
+if (
+  request.url === "/health" ||
+  request.url === "/dashboard" ||
+  request.url === "/analytics/export-csv"
+) {
   return;
 }
 
@@ -589,6 +593,45 @@ fastify.post("/admin/archive", async (request, reply) => {
     });
   }
 });
+
+// 🔥 NEW: Operational Audit Trail CSV Export Endpoint
+fastify.get("/analytics/export-csv", async (request, reply) => {
+  try {
+    fastify.log.info("Generating CSV data dump for historical resolution log...");
+
+    // 1. Pull all historical data logs from the database
+    const logs = await prisma.auditResolutionLog.findMany({
+      orderBy: { resolvedAt: "desc" },
+    });
+
+    // 2. Define the header columns line
+    let csvContent = "ID,Bank Transaction ID,Internal Record ID,Seconds To Resolve,Timestamp Locked\n";
+
+    // 3. Loop and sanitize rows to prevent Excel data-break profiles
+    for (const log of logs) {
+      const sanitizedId = log.id;
+      const sanitizedBankId = log.bankTransactionId;
+      const sanitizedInternalId = log.internalRecordId;
+      const seconds = log.secondsToResolve;
+      const timestamp = new Date(log.resolvedAt).toISOString();
+
+      csvContent += `"${sanitizedId}","${sanitizedBankId}","${sanitizedInternalId}",${seconds},"${timestamp}"\n`;
+    }
+
+    // 4. Configure HTTP attachments headers to force browser download prompts
+    const filename = `nexusflow_audit_trail_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    return reply
+      .header("Content-Type", "text/csv")
+      .header("Content-Disposition", `attachment; filename="${filename}"`)
+      .send(csvContent);
+
+  } catch (error: any) {
+    fastify.log.error(`CSV generation stream failed: ${error.message}`);
+    return reply.status(500).send("Failed to compile CSV spreadsheet export resource.");
+  }
+});
+
 
 
 
