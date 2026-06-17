@@ -44,7 +44,8 @@ fastify.addHook("preHandler", async (request, reply) => {
 if (
   request.url === "/health" ||
   request.url === "/dashboard" ||
-  request.url === "/analytics/export-csv"
+  request.url === "/analytics/export-csv" ||
+  request.url === "/transactions/resolve-batch"
 ) {
   return;
 }
@@ -631,6 +632,105 @@ fastify.get("/analytics/export-csv", async (request, reply) => {
     return reply.status(500).send("Failed to compile CSV spreadsheet export resource.");
   }
 });
+
+const batchResolveSchema = {
+  body: {
+    type: "object",
+    required: ["pairings"],
+    properties: {
+      pairings: {
+        type: "array",
+        minItems: 1,
+        items: {
+          type: "object",
+          required: ["bankTransactionId", "internalRecordId"],
+          properties: {
+            bankTransactionId: { type: "string", format: "uuid" },
+            internalRecordId: { type: "string", format: "uuid" },
+          },
+        },
+      },
+    },
+  },
+};
+
+fastify.post(
+  "/transactions/resolve-batch",
+  { schema: batchResolveSchema },
+  async (request, reply) => {
+    const { pairings } = request.body as {
+      pairings: Array<{ bankTransactionId: string; internalRecordId: string }>;
+    };
+
+    try {
+      fastify.log.info(
+        `Batch resolving ${pairings.length} transaction exceptions...`,
+      );
+
+      await prisma.$transaction(async (tx) => {
+        for (const pair of pairings) {
+          const bankTx = await tx.transaction.findUnique({
+            where: { id: pair.bankTransactionId },
+          });
+          const internalTx = await tx.transaction.findUnique({
+            where: { id: pair.internalRecordId },
+          });
+
+          if (!bankTx || !internalTx) continue;
+
+          const flaggedTime = new Date(bankTx.createdAt).getTime();
+          const secondsToResolve = Math.max(
+            0,
+            Math.floor((new Date().getTime() - flaggedTime) / 1000),
+          );
+
+          // Create logging entries
+          await tx.reconciliationMatch.create({
+            data: {
+              bankTransactionId: bankTx.id,
+              internalRecordId: internalTx.id,
+              confidenceScore: 1.0,
+            },
+          });
+
+          await tx.auditResolutionLog.create({
+            data: {
+              bankTransactionId: bankTx.id,
+              internalRecordId: internalTx.id,
+              secondsToResolve,
+            },
+          });
+
+          // Update ledger fields
+          await tx.transaction.update({
+            where: { id: bankTx.id },
+            data: { status: "MATCHED" },
+          });
+          await tx.transaction.update({
+            where: { id: internalTx.id },
+            data: { status: "MATCHED" },
+          });
+        }
+      });
+
+      return reply
+        .status(200)
+        .send({
+          success: true,
+          message: `Successfully resolved ${pairings.length} exceptions.`,
+        });
+    } catch (error: any) {
+      fastify.log.error(`Batch resolution failed: ${error.message}`);
+      return reply
+        .status(500)
+        .send({
+          success: false,
+          error: "Internal Batch Failure",
+          details: error.message,
+        });
+    }
+  },
+);
 
 
 

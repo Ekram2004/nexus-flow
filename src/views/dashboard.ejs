@@ -56,20 +56,25 @@
 
     <!-- Flagged Transactions Management Workspace -->
     <section class="bg-slate-950 border border-slate-800 rounded-xl shadow-xl overflow-hidden">
-      <div class="px-6 py-5 border-b border-slate-800 flex justify-between items-center">
-        <h2 class="text-lg font-semibold text-slate-200">Human Review Exception Queue</h2>
-        <span class="text-sm text-slate-400">Showing page <%= meta.currentPage %> of <%= meta.totalPages || 1 %></span>
-      </div>
-<div class="w-full sm:w-72">
-          <input 
-            type="text" 
-            id="table-search-input" 
-            onkeyup="executeFuzzySearch()" 
-            placeholder="Search exceptions (merchant, ID, amount)..." 
-            class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
-          />
+      <div class="px-6 py-5 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-200">Human Review Exception Queue</h2>
+          <span class="text-sm text-slate-400">Showing page <%= meta.currentPage %> of <%= meta.totalPages || 1 %></span>
+        </div>
+        
+        <!-- Batch Actions Controls Bar -->
+        <div id="batch-actions-bar" class="hidden flex items-center space-x-3 bg-teal-950/40 border border-teal-500/20 px-4 py-2 rounded-lg">
+          <span id="selected-count-label" class="text-xs text-teal-400 font-medium">0 items selected</span>
+          <button onclick="resolveSelectedBatch()" class="px-3 py-1 bg-teal-400 text-slate-950 rounded text-xs font-bold hover:bg-teal-300">
+            Resolve Selected
+          </button>
+        </div>
+
+        <div class="w-full sm:w-72">
+          <input type="text" id="table-search-input" onkeyup="executeFuzzySearch()" placeholder="Search exceptions..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-teal-500"/>
         </div>
       </div>
+
       <% if (transactions.length === 0) { %>
         <div class="p-12 text-center text-slate-500 space-y-2">
           <p class="text-4xl">🎉</p>
@@ -79,7 +84,10 @@
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
-              <tr class="bg-slate-900/50 text-slate-400 text-xs font-semibold tracking-wider uppercase border-b border-slate-800">
+              <tr class="bg-slate-900/50 text-slate-400 text-xs font-semibold uppercase border-b border-slate-800">
+                <th class="px-4 py-4 w-12 text-center">
+                  <input type="checkbox" id="select-all-box" onclick="toggleSelectAll(this)" class="rounded bg-slate-900 border-slate-700 text-teal-500 focus:ring-teal-500">
+                </th>
                 <th class="px-6 py-4">Transaction Details</th>
                 <th class="px-6 py-4">Source</th>
                 <th class="px-6 py-4">Amount</th>
@@ -90,25 +98,22 @@
             <tbody class="divide-y divide-slate-800/60 text-sm">
               <% transactions.forEach(tx => { %>
                 <tr class="hover:bg-slate-900/30 transition-colors">
+                  <td class="px-4 py-4 text-center">
+                    <input type="checkbox" name="exception-checkbox" value="<%= tx.id %>" onclick="handleRowCheck()" class="rounded bg-slate-900 border-slate-700 text-teal-500 focus:ring-teal-500">
+                  </td>
                   <td class="px-6 py-4 font-medium text-slate-200">
                     <div class="font-semibold"><%= tx.description %></div>
                     <div class="text-xs text-slate-500 font-mono mt-0.5"><%= tx.id %></div>
                   </td>
                   <td class="px-6 py-4">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= tx.source === 'BANK' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20' %>">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= tx.source === 'BANK' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400' %>">
                       <%= tx.source %>
                     </span>
                   </td>
-                  <td class="px-6 py-4 font-mono font-semibold text-slate-300">
-                    $<%= parseFloat(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) %>
-                  </td>
-                  <td class="px-6 py-4 text-slate-400">
-                    <%= new Date(tx.createdAt).toLocaleDateString() %>
-                  </td>
+                  <td class="px-6 py-4 font-mono font-semibold text-slate-300">$<%= parseFloat(tx.amount).toFixed(2) %></td>
+                  <td class="px-6 py-4 text-slate-400"><%= new Date(tx.createdAt).toLocaleDateString() %></td>
                   <td class="px-6 py-4 text-right">
-                    <button onclick="resolveManually('<%= tx.id %>')" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-semibold rounded-lg text-slate-950 bg-teal-400 hover:bg-teal-300 shadow-sm focus:outline-none transition-all">
-                      Resolve Pairing
-                    </button>
+                    <button onclick="resolveManually('<%= tx.id %>')" class="text-xs bg-teal-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg hover:bg-teal-300">Resolve Single</button>
                   </td>
                 </tr>
               <% }) %>
@@ -117,6 +122,7 @@
         </div>
       <% } %>
     </section>
+
         <!--  Historical Audit Trail Section Log Queue -->
     <section class="bg-slate-950 border border-slate-800 rounded-xl shadow-xl overflow-hidden mt-8">
       <div class="px-6 py-5 border-b border-slate-800">
@@ -228,7 +234,7 @@
         alert("Execution failure connecting to API server.");
       }
     }
-        // 🔥 NEW: Instant Client-Side Fuzzy Search Logic
+        // Instant Client-Side Fuzzy Search Logic
     function executeFuzzySearch() {
       const input = document.getElementById("table-search-input");
       const filter = input.value.toLowerCase().trim();
@@ -249,6 +255,54 @@
         }
       }
     }
+
+        function toggleSelectAll(masterBox) {
+      const boxes = document.getElementsByName("exception-checkbox");
+      boxes.forEach(box => box.checked = masterBox.checked);
+      handleRowCheck();
+    }
+
+    function handleRowCheck() {
+      const boxes = document.querySelectorAll('input[name="exception-checkbox"]:checked');
+      const actionBar = document.getElementById("batch-actions-bar");
+      const countLabel = document.getElementById("selected-count-label");
+
+      if (boxes.length > 0) {
+        actionBar.classList.remove("hidden");
+        countLabel.innerText = `${boxes.length} items selected`;
+      } else {
+        actionBar.classList.add("hidden");
+      }
+    }
+
+    async function resolveSelectedBatch() {
+      const boxes = document.querySelectorAll('input[name="exception-checkbox"]:checked');
+      const pairings = [];
+
+      for (const box of boxes) {
+        const internalId = prompt(`Enter matching Internal UUID for Bank Transaction ID:\n${box.value}`);
+        if (!internalId) return;
+        pairings.push({ bankTransactionId: box.value, internalRecordId: internalId });
+      }
+
+      try {
+        const response = await fetch('/transactions/resolve-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-KEY': 'nexus_secret_secure_key_2026' },
+          body: JSON.stringify({ pairings })
+        });
+        const data = await response.json();
+        if (data.success) {
+          alert("Success! Batch transactions reconciled and updated.");
+          window.location.reload();
+        } else {
+          alert("Error: " + data.details);
+        }
+      } catch (err) {
+        alert("Execution failure processing batch parameters.");
+      }
+    }
+
 
   </script>
 </body>
