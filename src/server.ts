@@ -5,6 +5,15 @@ import { PrismaClient } from "@prisma/client";
 import { Pool } from 'pg';
 import { PrismaPg } from "@prisma/adapter-pg";
 import { workerQueue } from "./utils/queue.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import pointOfView from "@fastify/view";
+import ejs from "ejs";
+
+
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -20,12 +29,21 @@ const fastify = Fastify({
   },
 });
 
+await fastify.register(pointOfView, {
+  engine: {
+    ejs: ejs,
+  },
+  root: path.join(__dirname, "views"),
+});
+
+
 // Global API Security Middleware Hook
 fastify.addHook("preHandler", async (request, reply) => {
 
-    if (request.url === "/health") {
-      return;
-    }
+if (request.url === "/health" || request.url === "/dashboard") {
+  return;
+}
+
 
     const apiKey = request.headers["x-api-key"];
     const expectedKey = process.env.RECON_API_KEY; 
@@ -267,6 +285,41 @@ fastify.get("/queue/status", async (request, reply) => {
     });
   }
 });
+
+
+
+//  Browser HTML Dashboard Render Route Endpoint
+fastify.get("/dashboard", async (request, reply) => {
+  try {
+    // Collect queue analytics
+    const workerMetrics = workerQueue.getMetrics();
+
+    // Query database directly for open items window
+    const [totalCount, flaggedTransactions] = await Promise.all([
+      prisma.transaction.count({ where: { status: "FLAGGED" } }),
+      prisma.transaction.findMany({
+        where: { status: "FLAGGED" },
+        orderBy: { createdAt: "desc" },
+        take: 20, // Display top 20 newest exceptions automatically
+      }),
+    ]);
+
+    
+    return reply.view("dashboard.ejs", {
+      worker: workerMetrics,
+      meta: {
+        totalRecords: totalCount,
+        currentPage: 1,
+        totalPages: Math.ceil(totalCount / 20),
+      },
+      transactions: flaggedTransactions,
+    });
+  } catch (error: any) {
+    fastify.log.error(`Dashboard rendering crashed: ${error.message}`);
+    return reply.status(500).send("Fatal Error Loading Interface Workspace.");
+  }
+});
+
 
 
 
