@@ -330,21 +330,30 @@ fastify.get("/dashboard", async (request, reply) => {
     const workerMetrics = workerQueue.getMetrics();
 
     // Query database directly for open items window
-    const [totalCount, flaggedTransactions, aggregations, storageQuery] =
-      await Promise.all([
-        prisma.transaction.count({ where: { status: "FLAGGED" } }),
-        prisma.transaction.findMany({
-          where: { status: "FLAGGED" },
-          orderBy: { createdAt: "desc" },
-          take: 20, // Display top 20 newest exceptions automatically
-        }),
-        prisma.auditResolutionLog.aggregate({
-          _avg: { secondsToResolve: true },
-        }),
-        prisma.$queryRawUnsafe<any[]>(`
+    const [
+      totalCount,
+      flaggedTransactions,
+      aggregations,
+      storageQuery,
+      historicalLogs,
+    ] = await Promise.all([
+      prisma.transaction.count({ where: { status: "FLAGGED" } }),
+      prisma.transaction.findMany({
+        where: { status: "FLAGGED" },
+        orderBy: { createdAt: "desc" },
+        take: 20, // Display top 20 newest exceptions automatically
+      }),
+      prisma.auditResolutionLog.aggregate({
+        _avg: { secondsToResolve: true },
+      }),
+      prisma.$queryRawUnsafe<any[]>(`
         SELECT pg_size_pretty(pg_total_relation_size('"Transaction"')) AS human_readable
       `),
-      ]);
+      prisma.auditResolutionLog.findMany({
+        orderBy: { resolvedAt: "desc" },
+        take: 10,
+      }),
+    ]);
 const avgSeconds = Math.round(aggregations._avg.secondsToResolve || 0);
 const readableAvgSpeed =
   avgSeconds > 0
@@ -363,6 +372,7 @@ const readableAvgSpeed =
         tableDiskSize: tableSizePretty,
       },
       transactions: flaggedTransactions,
+      history: historicalLogs,
     });
   } catch (error: any) {
     fastify.log.error(`Dashboard rendering crashed: ${error.message}`);
