@@ -1,0 +1,38 @@
+
+
+services:
+  #  PostgreSQL with pgvector extension layer preset
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: nexusflow_db
+    ports:
+      - "5433:5432" 
+    environment:
+      POSTGRES_USER: nexus_admin
+      POSTGRES_PASSWORD: secure_db_password_2026
+      POSTGRES_DB: nexusflow_ledger
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus_admin -d nexusflow_ledger"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Core NexusFlow Autonomous Intelligence Web Service Engine
+  app:
+    build: .
+    container_name: nexusflow_api_engine
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - RECON_API_KEY=${RECON_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NOTIFICATION_WEBHOOK_URL=${NOTIFICATION_WEBHOOK_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
