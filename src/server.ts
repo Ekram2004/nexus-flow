@@ -22,13 +22,19 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 
+const isProduction =
+  process.env.NODE_ENV === "production" || !!process.env.RENDER;
+
 const fastify = Fastify({
-  logger: {
-    transport: {
-      target: "pino-pretty",
-    },
-  },
+  logger: isProduction
+    ? true 
+    : {
+        transport: {
+          target: "pino-pretty", 
+        },
+      },
 });
+
 
 await fastify.register(pointOfView, {
   engine: {
